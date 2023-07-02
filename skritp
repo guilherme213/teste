@@ -1,50 +1,96 @@
--- Configurações
-local FOV = FOV or 180
-local HIT_PARTS = HIT_PARTS or { "Head", "Torso" }
-local HIT_CHANCES = { Head = 40, Torso = 60 }
-local MAX_DISTANCE = 300 -- Distância máxima de verificação (ajuste conforme necessário)
+local FOV = 60
+local HIT_PARTS = { "Head", "TORSO" }
 
--- Restante do código (sem alterações)
+local isEnabled = true  -- Variável para controlar o estado ativo do script
 
-local function isPlayerVisible(hitPart)
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = { localPlayer.Character }
+local camera = workspace.CurrentCamera
+local players = workspace:WaitForChild("Players")
+local localPlayer = game:GetService("Players").LocalPlayer
 
-    local raycastResult = workspace:Raycast(
-        camera.CFrame.Position,
-        (hitPart.Position - camera.CFrame.Position).Unit * MAX_DISTANCE,
-        raycastParams
-    )
-
-    if raycastResult and raycastResult.Instance and raycastResult.Instance:IsDescendantOf(hitPart.Parent) then
-        return true
+local function getFirearm()
+    for _, child in camera:GetChildren() do
+        if child:FindFirstChild("Trigger") then
+            return child
+        end
     end
+end
 
-    return false
+local function getEnemyTeam()
+    for _, team in players:GetChildren() do
+        if team.Name ~= localPlayer.TeamColor.Name then
+            return team
+        end
+    end
 end
 
 local function getClosest()
-    local closestPart
-    local closestAngle = math.rad(FOV * 0.5)
+    if not isEnabled then  -- Se o script estiver desligado, retorna nil
+        return
+    end
 
-    for _, character in ipairs(getEnemyTeam():GetChildren()) do
+    local _hitPart
+    local _angle = math.rad(FOV * 0.5)
+
+    for _, character in getEnemyTeam():GetChildren() do
         local hitPartName = HIT_PARTS[math.random(1, #HIT_PARTS)]
-        local hitChance = HIT_CHANCES[hitPartName]
-        local shouldHit = math.random(1, 100) <= hitChance
+        local hitPart = character:FindFirstChild(hitPartName)
 
-        if shouldHit then
-            local hitPart = character:FindFirstChild(hitPartName)
-            if hitPart and isPlayerVisible(hitPart) then
-                local vector = (hitPart.Position - camera.CFrame.Position).Unit
-                local angle = math.acos(camera.CFrame.LookVector:Dot(vector))
-                if angle < closestAngle then
-                    closestPart = hitPart
-                    closestAngle = angle
-                end
+        if not hitPart then
+            continue
+        end
+
+        local hitChance = 1.0
+        if hitPartName == "Head" then
+            hitChance = 0.4  -- 40% de chance de acerto na cabeça
+        elseif hitPartName == "TORSO" then
+            hitChance = 0.6  -- 60% de chance de acerto no torso
+        end
+
+        if math.random() <= hitChance then
+            local vector = (hitPart.Position - camera.CFrame.Position).Unit
+            local angle = math.acos(camera.CFrame.LookVector:Dot(vector))
+            if angle < _angle then
+                _hitPart = hitPart
+                _angle = angle
             end
         end
     end
 
-    return closestPart
+    return _hitPart
 end
+
+-- Função para ligar/desligar o script quando pressionar a tecla
+local function toggleScript()
+    isEnabled = not isEnabled
+    if isEnabled then
+        print("Script ligado.")
+    else
+        print("Script desligado.")
+    end
+end
+
+-- Conectar evento do teclado para ligar/desligar o script usando a tecla 'T'
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.T then
+        toggleScript()
+    end
+end)
+
+-- Conexão para ajustar a mira da arma
+game:GetService("RunService").Stepped:Connect(function()
+    local firearm = getFirearm()
+    local hitPart = firearm and getClosest()
+    if not hitPart then
+        return
+    end
+
+    for _, part in firearm:GetChildren() do
+        local isAimPart = part.Name == "Flame" or string.find(part.Name, "SightMark")
+        local weld = isAimPart and part:GetJoints()[1]
+        if weld then
+            weld.C0 = weld.Part0.CFrame:ToObjectSpace(
+                CFrame.lookAt(weld.Part1.Position, hitPart.Position)
+            )
+        end
+    end
+end)
