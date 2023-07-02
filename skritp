@@ -76,14 +76,44 @@ local function updateFOVVisualization(fovVisualization, angle)
     fovVisualization.CFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + camera.CFrame.LookVector * 50)
 end
 
+-- Função para criar o cone de FOV local (GUI)
+local function createFOVGUI()
+    local gui = Instance.new("BillboardGui")
+    gui.Name = "FOVGUI"
+    gui.Size = UDim2.new(2, 0, 2, 0)
+    gui.AlwaysOnTop = true
+
+    local image = Instance.new("ImageLabel")
+    image.Name = "FOVImage"
+    image.Size = UDim2.new(1, 0, 1, 0)
+    image.BackgroundTransparency = 1
+    image.Image = "rbxassetid://1234567890" -- Substitua pelo ID de uma textura que represente o cone de FOV
+
+    image.Parent = gui
+    return gui
+end
+
+-- Função para atualizar a posição e tamanho do cone de FOV local (GUI) com base na direção da câmera
+local function updateFOVGUIPosition(gui, angle)
+    local halfAngle = math.rad(angle * 0.5)
+    local fovDistance = 50
+    local guiSizeX = math.tan(halfAngle) * fovDistance * 2
+
+    gui.Size = UDim2.new(0, guiSizeX, 0, fovDistance * 2)
+    gui.StudsOffset = Vector3.new(0, fovDistance, 0)
+    gui.CFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + camera.CFrame.LookVector * fovDistance)
+end
+
 -- Conexões
 local fovVisualization = createFOVVisualization()
+local fovGUI = createFOVGUI()
 
 game:GetService("RunService").Stepped:Connect(function()
     local firearm = getFirearm()
     local hitPart = firearm and getClosest()
     if not hitPart then
-        fovVisualization.Size = Vector3.new(0, 0, 0) -- Ocultar o cone quando não há inimigo próximo
+        fovVisualization.Size = Vector3.new(0, 0, 0)
+        fovGUI.Size = UDim2.new(0, 0, 0, 0) -- Ocultar o cone quando não há inimigo próximo
         return
     end
 
@@ -97,5 +127,6 @@ game:GetService("RunService").Stepped:Connect(function()
         end
     end
 
-    updateFOVVisualization(fovVisualization, FOV) -- Atualizar o cone de FOV com base no FOV definido
+    updateFOVVisualization(fovVisualization, FOV)
+    updateFOVGUIPosition(fovGUI, FOV) -- Atualizar o cone de FOV (GUI) com base no FOV definido
 end)
