@@ -1,5 +1,5 @@
 -- Configurações
-local FOV = FOV or 180
+local FOV = FOV or 50
 local HIT_PARTS = HIT_PARTS or { "Head", "Torso" }
 local HIT_CHANCES = { Head = 40, Torso = 60 }
 local MAX_DISTANCE = 300 -- Distância máxima de verificação (ajuste conforme necessário)
