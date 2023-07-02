@@ -1,132 +1,50 @@
--- Defina o tamanho do FOV e as partes do inimigo que devem ser consideradas
-local FOV = 180
-local HIT_PARTS = { 
-    {Part = "Head", Chance = 40},
-    {Part = "Torso", Chance = 60}
-}
+-- Configurações
+local FOV = FOV or 180
+local HIT_PARTS = HIT_PARTS or { "Head", "Torso" }
+local HIT_CHANCES = { Head = 40, Torso = 60 }
+local MAX_DISTANCE = 300 -- Distância máxima de verificação (ajuste conforme necessário)
 
--- Variáveis
-local camera = workspace.CurrentCamera
-local players = workspace:WaitForChild("Players")
-local localPlayer = game:GetService("Players").LocalPlayer
+-- Restante do código (sem alterações)
 
--- Funções
-local function getFirearm()
-    for _, child in camera:GetChildren() do
-        if child:FindFirstChild("Trigger") then
-            return child
-        end
+local function isPlayerVisible(hitPart)
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = { localPlayer.Character }
+
+    local raycastResult = workspace:Raycast(
+        camera.CFrame.Position,
+        (hitPart.Position - camera.CFrame.Position).Unit * MAX_DISTANCE,
+        raycastParams
+    )
+
+    if raycastResult and raycastResult.Instance and raycastResult.Instance:IsDescendantOf(hitPart.Parent) then
+        return true
     end
-end
 
-local function getEnemyTeam()
-    for _, team in players:GetChildren() do
-        if team.Name ~= localPlayer.TeamColor.Name then
-            return team
-        end
-    end
+    return false
 end
 
 local function getClosest()
-    local _hitPart
-    local _angle = math.rad(FOV * 0.5)
-    for _, character in pairs(getEnemyTeam():GetChildren()) do
-        local totalChance = 0
-        for _, hitPartInfo in pairs(HIT_PARTS) do
-            totalChance = totalChance + hitPartInfo.Chance
-        end
+    local closestPart
+    local closestAngle = math.rad(FOV * 0.5)
 
-        local hitPartIndex = math.random(1, totalChance)
-        local accumulatedChance = 0
-        for _, hitPartInfo in pairs(HIT_PARTS) do
-            accumulatedChance = accumulatedChance + hitPartInfo.Chance
-            if hitPartIndex <= accumulatedChance then
-                local hitPart = character:FindFirstChild(hitPartInfo.Part)
-                if hitPart then
-                    local vector = (hitPart.Position - camera.CFrame.Position).Unit
-                    local angle = math.acos(camera.CFrame.LookVector:Dot(vector))
-                    if angle < _angle then
-                        _hitPart = hitPart
-                        _angle = angle
-                    end
+    for _, character in ipairs(getEnemyTeam():GetChildren()) do
+        local hitPartName = HIT_PARTS[math.random(1, #HIT_PARTS)]
+        local hitChance = HIT_CHANCES[hitPartName]
+        local shouldHit = math.random(1, 100) <= hitChance
+
+        if shouldHit then
+            local hitPart = character:FindFirstChild(hitPartName)
+            if hitPart and isPlayerVisible(hitPart) then
+                local vector = (hitPart.Position - camera.CFrame.Position).Unit
+                local angle = math.acos(camera.CFrame.LookVector:Dot(vector))
+                if angle < closestAngle then
+                    closestPart = hitPart
+                    closestAngle = angle
                 end
-                break
             end
         end
     end
-    return _hitPart
+
+    return closestPart
 end
-
--- Função para criar o cone de FOV
-local function createFOVVisualization()
-    local fovVisualization = Instance.new("Part")
-    fovVisualization.Size = Vector3.new(0, 0, 0)
-    fovVisualization.Anchored = true
-    fovVisualization.CanCollide = false
-    fovVisualization.Transparency = 0.5
-    fovVisualization.BrickColor = BrickColor.new("Bright red")
-    fovVisualization.Parent = workspace
-    return fovVisualization
-end
-
--- Função para atualizar o cone de FOV com base na direção da câmera
-local function updateFOVVisualization(fovVisualization, angle)
-    local halfAngle = math.rad(angle * 0.5)
-    fovVisualization.Size = Vector3.new(math.tan(halfAngle) * 50, 1, 50)
-    fovVisualization.CFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + camera.CFrame.LookVector * 50)
-end
-
--- Função para criar o cone de FOV local (GUI)
-local function createFOVGUI()
-    local gui = Instance.new("BillboardGui")
-    gui.Name = "FOVGUI"
-    gui.Size = UDim2.new(2, 0, 2, 0)
-    gui.AlwaysOnTop = true
-
-    local image = Instance.new("ImageLabel")
-    image.Name = "FOVImage"
-    image.Size = UDim2.new(1, 0, 1, 0)
-    image.BackgroundTransparency = 1
-    image.Image = "rbxassetid://1234567890" -- Substitua pelo ID de uma textura que represente o cone de FOV
-
-    image.Parent = gui
-    return gui
-end
-
--- Função para atualizar a posição e tamanho do cone de FOV local (GUI) com base na direção da câmera
-local function updateFOVGUIPosition(gui, angle)
-    local halfAngle = math.rad(angle * 0.5)
-    local fovDistance = 50
-    local guiSizeX = math.tan(halfAngle) * fovDistance * 2
-
-    gui.Size = UDim2.new(0, guiSizeX, 0, fovDistance * 2)
-    gui.StudsOffset = Vector3.new(0, fovDistance, 0)
-    gui.CFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + camera.CFrame.LookVector * fovDistance)
-end
-
--- Conexões
-local fovVisualization = createFOVVisualization()
-local fovGUI = createFOVGUI()
-
-game:GetService("RunService").Stepped:Connect(function()
-    local firearm = getFirearm()
-    local hitPart = firearm and getClosest()
-    if not hitPart then
-        fovVisualization.Size = Vector3.new(0, 0, 0)
-        fovGUI.Size = UDim2.new(0, 0, 0, 0) -- Ocultar o cone quando não há inimigo próximo
-        return
-    end
-
-    for _, part in pairs(firearm:GetChildren()) do
-        local isAimPart = part.Name == "Flame" or string.find(part.Name, "SightMark")
-        local weld = isAimPart and part:GetJoints()[1]
-        if weld then
-            weld.C0 = weld.Part0.CFrame:ToObjectSpace(
-                CFrame.lookAt(weld.Part1.Position, hitPart.Position)
-            )
-        end
-    end
-
-    updateFOVVisualization(fovVisualization, FOV)
-    updateFOVGUIPosition(fovGUI, FOV) -- Atualizar o cone de FOV (GUI) com base no FOV definido
-end)
